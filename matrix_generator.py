@@ -52,22 +52,29 @@ def is_invertable(a):
 def display_matrix(a):
     for row in a:
         print(row)
-    print("\n")
 
 # Main program loop
 created_matrix_tally = 0
 matrix_list = list()
+matrix_inv_list = list()
 
 while created_matrix_tally < N:
     # Create new random matrix
     A = np.random.randint(minimum, maximum, size=(m,m))
     
     # Check invertability
-    if is_invertable(A):
+    try:
+        A_inv = np.linalg.inv(A)
+        
         A_float = A.astype(np.float32)
+        A_inv_float = A_inv.astype(np.float32)
+        
         matrix_list.append(A_float)
+        matrix_inv_list.append(A_inv_float)
+        
         created_matrix_tally += 1
-    else:
+        
+    except np.linalg.LinAlgError:
         print("Invertible:")
         display_matrix(A)
 
@@ -75,7 +82,9 @@ print("Last matrix created for reference:")
 display_matrix(A_float)
     
 # Concatenate all of the (m x m) matrices into a 3-D matrix: (N, m, m)
-matrix_dataset = np.stack(matrix_list, axis=0)
+matrix_input_dataset = np.stack(matrix_list, axis=0)
+matrix_output_dataset = np.stack(matrix_inv_list, axis=0)
+matrix_dataset = np.stack([matrix_input_dataset, matrix_output_dataset])
 print("Dataset shape:", matrix_dataset.shape)
 
 # Save the dataset as .npy file in destination
