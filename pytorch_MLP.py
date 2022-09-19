@@ -37,7 +37,7 @@ class MLP(nn.Module):
         
         for hidden_size in hidden_layers:
             layers.append(nn.Linear(current_input_size, hidden_size))
-            layers.append(nn.ReLU())
+            layers.append(nn.LeakyReLU())
             current_input_size = hidden_size
         
         layers.append(nn.Linear(current_input_size, output_layer))
@@ -69,23 +69,20 @@ class MatrixDataset(Dataset):
     def __len__(self):
         return self.data.shape[1]
     def __getitem__(self, ind):
-        x = self.data[0][ind].reshape(9) / 1000
-        y = self.data[1][ind].reshape(9) / 1000
+        x = self.data[0][ind].reshape(9)
+        y = self.data[1][ind].reshape(9)
         return x,y
     
-def inversionLoss(A, M_inv):
+def inversionLoss(A, A_inv, M_inv):
     # Takes A, the input matrix
     #       A_inv, the inverse of A
     #       M_inv, the models attempt at inversion
     
-    A = A.reshape(-1,3,3)
-    M_inv = M_inv.reshape(-1,3,3)
-    
     # Multiply A by M_inv
-    pred_I = torch.bmm(A, M_inv) * 1000 * 1000
+    pred_I = torch.bmm(A.reshape(-1,3,3), M_inv.reshape(-1,3,3))
     true_I = torch.eye(3, 3).reshape((1, 3, 3)).repeat(A.shape[0], 1, 1).to(device)
     
-    loss = nn.functional.mse_loss(pred_I, true_I)
+    loss = nn.functional.mse_loss(M_inv, A_inv) + nn.functional.mse_loss(pred_I, true_I)
     return loss
 
 # ============================================================================
@@ -93,7 +90,7 @@ def inversionLoss(A, M_inv):
 train_set = MatrixDataset(train_data)
 test_set = MatrixDataset(test_data)
 
-batch_size = 64
+batch_size = 16
 
 train_loader = DataLoader(train_set, batch_size=batch_size, shuffle=True)
 test_loader  = DataLoader(test_set, batch_size=batch_size, shuffle=False)
@@ -103,7 +100,7 @@ print("===== INSTANTIATE THE MODEL =====")
 
 input_layer = 9
 output_layer = 9
-layers = [32,128,128,32]
+layers = [16,64,256,16]
 
 model = MLP(input_layer, layers, output_layer).to(device)
 optimizer = torch.optim.Adam(model.parameters())
@@ -115,7 +112,7 @@ print(model)
 
 print("===== TRAIN THE MODEL =====")
 
-epochs = 10
+epochs = 20
 
 model.train()
 for epoch in range(epochs):
@@ -127,13 +124,13 @@ for epoch in range(epochs):
         y = y.to(device)
         
         output = model(x)
-        loss = criterion(x, output)
+        loss = criterion(x, y, output)
         loss.backward()
         losses.append(loss.item())
         
         optimizer.step()
         
-        if batch_num % 5 == 0:
+        if batch_num % 40 == 0:
             print('\tEpoch %d | Batch %d | Loss %6.5f' % (epoch, batch_num, loss.item()))
     print('Epoch %d | Loss %6.5f' % (epoch, sum(losses)/len(losses)))
     
@@ -146,17 +143,15 @@ model.eval()
 ind = np.random.randint(2000)
 sample = test_set[ind]
 
-print(sample[0])
-print(sample[1])
-print(np.matmul(sample[0].reshape(3,3), sample[1].reshape(3,3)) * 1000 * 1000)
+print(np.matmul(sample[0].reshape(3,3), sample[1].reshape(3,3)))
 
 x,y = sample
 x = torch.tensor(x).to(device).float()
 y = torch.tensor(y).to(device)
 
 output = model(x)
-print(output)
 
 output = output.cpu().detach().numpy()
-print(output, sample[1])
-print(np.matmul(sample[0].reshape(3,3), output.reshape(3,3)) * 1000 * 1000)
+print(output)
+print(sample[1])
+print(np.matmul(sample[0].reshape(3,3), output.reshape(3,3)))
